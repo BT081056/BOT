@@ -1,0 +1,114 @@
+for Na in glob.glob('D:\ARGB\*'):
+#for Na in glob.glob(r'D:\ARGB\2020-12-29-11-49-00small*'):
+    NM = Na[-20:-4]
+    img = cv2.imread(Na)
+    
+    imgR = cv2.imread(Na)
+    img = cv2.cvtColor(imgR,cv2.COLOR_BGR2HSV)
+    cv2.imwrite('thresRRR%s.jpg'%NM,imgR)
+    lower = np.array([22,0,0])
+    upper = np.array([37,255,67])
+    mask = cv2.inRange(img,lower,upper)
+    # 对原图图像进行按位与的操作，掩码区域保留
+    imgResult = cv2.bitwise_and(img,img,mask=mask)
+    
+    
+    kernel1 = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
+    kernel2 = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    
+    # 開運算
+    opened = cv2.morphologyEx(imgResult, cv2.MORPH_OPEN, kernel2)
+    # 顯示腐蝕後的影象
+    # 閉運算
+    closed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel1)
+    # 顯示腐蝕後的影象
+    cv2.imwrite("Close%s.jpg"%NM, closed);
+
+    img2 = cv2.cvtColor(closed,cv2.COLOR_BGR2GRAY)
+    ret,thresh = cv2.threshold(img2,0,255,cv2.THRESH_BINARY)
+    #cv2.imwrite(i+'ther.jpg',thresh)
+    #GETSIZE = thresh[200:750,400:960]
+    
+    
+    contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    #contours[0].shape
+       #灰度图片直方图均衡化
+    area = []
+    for k in range(len(contours)):
+    	area.append((k,contours[k].shape[0]))
+    
+    np.argmax(area,1)
+    area.sort(key=lambda score: score[1])
+    areaTop2 = area[-2:]
+    
+    
+    DD = []
+    
+    for Cnt in range(0,2):
+        
+        ind,_ = areaTop2[Cnt]##取出物件的index
+        cnt = contours[ind]#取得第一個物件
+        M = cv2.moments(cnt)#计算第一条轮廓的各阶矩,字典形式
+        cx = int(M['m10']/M['m00'])
+        cy = int(M['m01']/M['m00'])
+        DD.append((cx,cy))
+    
+    temp = np.zeros(img.shape,np.uint8)*255
+    imgnew = cv2.drawContours(imgResult.copy(), contours, -1, (0,255,0), 3)#把所有轮廓画出来
+
+    cv2.line(temp, DD[0], DD[1], (1,1,1), 25)
+    if sum(DD[0]) > sum(DD[1]):
+        Lx,Ly = DD[0]
+    else:
+        Lx,Ly = DD[1]
+        
+    BlueLin = temp*imgR
+    
+#    ###標記出 上下藍色蓋子的中心
+#    cv2.circle(imgR, DD[0], 2, (128,128,128), -1)
+#    cv2.circle(imgR, DD[1], 2, (128,128,128), -1)
+#    cv2.imwrite('Point%s.jpg'%NM,imgR)
+
+    img2 = np.power(BlueLin/float(np.max(img.copy())),4)
+    
+    
+    cv2.imwrite('gamma%s.jpg'%NM,img2)
+    img_norm=cv2.normalize(img2,dst=None,alpha=3,beta=0,norm_type=cv2.NORM_MINMAX)
+    Bt = 255/img_norm.max()
+    img_norm2 = img_norm*Bt
+    cv2.imwrite('normalize%s.jpg'%NM,img_norm2)
+
+    Unint8Img = img_norm2.astype(np.uint8)
+    
+    img = cv2.cvtColor(Unint8Img,cv2.COLOR_BGR2HSV)
+    lower = np.array([0,0,160])
+    upper = np.array([255,255,255])
+    mask = cv2.inRange(img,lower,upper)
+    # 对原图图像进行按位与的操作，掩码区域保留
+    imgResult = cv2.bitwise_and(img,img,mask=mask)
+    for ix in range(0,len(imgResult)):
+        if np.sum(imgResult[ix,:]/255) >5:
+            cv2.line(imgR, (0,ix), (Unint8Img.shape[1],ix), (255,0,0), 5)
+            
+            if DD[0][1] > DD[1][1]:
+                x1,y1 = DD[0]
+                x2,y2 = DD[1]
+            else:
+                x1,y1 = DD[1]
+                x2,y2 = DD[0]
+            if x1 == x2:
+                x = x1
+            else:
+                m = (x1-x2)/(y1-y2)
+                
+                y = ix
+                x = int(x1 - m*(y1-y))
+#                x = int(x1/x1-(m*(y1-y)))
+            cv2.circle(imgR, (x,y), 2, (128,255,128), -1)
+            cv2.line(imgR, (Lx,Ly), (x,y), (0,255,255), 2)
+#            str(int(((Lx-x)**2+(Ly-y)**2)**0.5))
+            text = str(int(((Lx-x)**2+(Ly-y)**2)**0.5))
+            cv2.putText(imgR, text, (x+10, y), cv2.FONT_HERSHEY_PLAIN,1, (0, 255, 255), 2, cv2.LINE_AA)
+            
+            break
+    cv2.imwrite('Len%s.jpg'%NM,imgR)
